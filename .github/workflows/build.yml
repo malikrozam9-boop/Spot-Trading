@@ -1,0 +1,51 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android scaffold and copy app files
+        run: |
+          flutter create --project-name spot_signal --org com.spotsignal --platforms=android scaffold
+          cp pubspec.yaml scaffold/pubspec.yaml
+          rm -rf scaffold/lib scaffold/test
+          mkdir scaffold/lib
+          cp main.dart scaffold/lib/main.dart
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET" />\n    <application#' scaffold/android/app/src/main/AndroidManifest.xml
+
+      - name: Build release APK
+        working-directory: scaffold
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spot-signal-apk
+          path: scaffold/build/app/outputs/flutter-apk/app-release.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Spot Signal build ${{ github.run_number }}
+          files: scaffold/build/app/outputs/flutter-apk/app-release.apk
